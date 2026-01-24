@@ -1,0 +1,79 @@
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# IPython
+profile_default/
+
+# Pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets and keys
+*.pem
+*.key
+credentials.json
+
+# Data: ignore raw large datasets (keep processed data tracked intentionally)
+data/raw/*.csv
+data/raw/*.csv.gz
+data/raw/*.zip
+data/raw/*.tar.gz
+data/raw/*.tar
+data/raw/*.7z
+artifacts/
+data/processed/*.csv
+
+# Models and large artifacts
+models/
+*.h5
+*.pt
+*.pth
+*.joblib
+
+# Notebook conversion outputs
+*.nbconvert.ipynb
+
+# Temporary files
+*.tmp
+*.bak
