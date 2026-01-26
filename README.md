@@ -6,3 +6,12 @@
 
 ## Dataset used
 - Raw Data: the raw dataset used can be found at [Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club)
+- Processed datasets and artifacts can be found in this folder once the project has been cloned: [data/processed](data/processed) and [artifacts](artifacts)
+
+# Project workflow
+The project itself is divided into six detailed steps, and scripts to go through all six steps.
+
+- **Phase 1 - Data Cleaning**
+	- Purpose: clean inputs, handle missingness, and produce EDA summaries.
+	- Key outputs: cleaned dataset and EDA plots.
+	- Files: [src/data_preprocessing.py](src/data_preprocessing.py)
