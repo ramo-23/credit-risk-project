@@ -15,3 +15,13 @@ The project itself is divided into six detailed steps, and scripts to go through
 	- Purpose: clean inputs, handle missingness, and produce EDA summaries.
 	- Key outputs: cleaned dataset and EDA plots.
 	- Files: [src/data_preprocessing.py](src/data_preprocessing.py)
+
+- **Phase 2 - Feature Engineering & Selection**
+	- Purpose: derive predictive features, encode categories, and select stable predictors.
+	- Key outputs: `data/processed/accepted_fe.csv`, feature importance tables.
+	- Files: [src/feature_engineering.py](src/feature_engineering.py)
+
+- **Phase 3 — Modeling & Calibration**
+	- Purpose: train PD models, calibrate probabilities, and produce primary (champion) model.
+	- Key outputs: serialized model artifacts, calibration plots, performance metrics.
+	- Files: [src/modeling.py](src/modeling.py), [src/calibration.py](src/calibration.py)
