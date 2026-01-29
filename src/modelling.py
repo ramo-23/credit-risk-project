@@ -1,4 +1,4 @@
-"""Model training utilities for PD modeling.
+"""Model training utilities for Phase 3 PD modeling.
 
 This module implements reproducible, simple, and interpretable logistic
 regression training and tuning functions. It favors explainability over
@@ -8,10 +8,9 @@ When executed as a script (e.g. `python src/modeling.py`) ensure the
 project root is on `sys.path` so absolute imports like `from src.utils`
 work correctly.
 """
-
 from pathlib import Path
 import sys
-# Ensure project root is on sys.path for absolute imports
+# Add project root to sys.path when run directly so `from src import ...` works
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -23,13 +22,15 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import  roc_auc_score
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score, recall_score, brier_score_loss
 from sklearn.calibration import calibration_curve
 
 import argparse
 
+# Prefer package imports, but allow running as a script where `src` may not be
+# importable (e.g., no package __init__). Fall back to loading modules from
 # the local `src/` files so `python src/modeling.py` still works.
 try:
     from src.utils import set_seed, save_model
@@ -42,12 +43,12 @@ except Exception:
     def _load_local(module_name: str, file_path: Path):
         spec = importlib.util.spec_from_file_location(module_name, str(file_path))
         if spec is None or spec.loader is None:
-            raise ImportError(f"Cannot load module {module_name} from {file_path}")
+            raise ImportError(f"Could not load module {module_name} from {file_path}")
         mod = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
-        spec.loader.exec_module(mod) 
+        spec.loader.exec_module(mod)  # type: ignore
         return mod
-    
+
     _utils = _load_local("utils", _ROOT_SRC / "utils.py")
     set_seed = _utils.set_seed
     save_model = _utils.save_model
@@ -71,8 +72,8 @@ def time_based_split(df: pd.DataFrame, time_col: str = "issue_d", train_end: Opt
     """
     df = df.copy()
     if time_col not in df.columns:
-        raise KeyError(f"Time column '{time_col}' not found in DataFrame.")
-    df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
+        raise KeyError(f"time_col '{time_col}' not found in dataframe")
+    df[time_col] = pd.to_datetime(df[time_col], errors="coerce")
     if train_end is None:
         cutoff = df[time_col].quantile(0.8)
     else:
@@ -97,40 +98,40 @@ def recover_time_column(df: pd.DataFrame, clean_path: Path, time_col: str = "iss
     clean_path = Path(clean_path)
     if not clean_path.exists():
         return df
-    
-    try: 
+
+    try:
         df_clean = pd.read_csv(clean_path)
     except Exception:
         return df
-    
+
     if time_col not in df_clean.columns:
         return df
-    
+
     df = df.copy()
 
-    # positional alignment when rows are equal
+    # 1) positional alignment when rows equal
     try:
         if df_clean.shape[0] == df.shape[0]:
-            df[time_col] = pd.to_datetime(df_clean[time_col], errors='coerce')
-            print(f"Added '{time_col}' from {clean_path} by positional alignment.")
+            df[time_col] = pd.to_datetime(df_clean[time_col].values, errors="coerce")
+            print(f"Added '{time_col}' from {clean_path} by positional alignment")
             return df
     except Exception:
         pass
 
-    # index equality
-    try: 
+    # 2) index equality
+    try:
         if list(df_clean.index) == list(df.index):
-            df[time_col] = pd.to_datetime(df_clean[time_col].values, errors='coerce')
-            print(f"Added '{time_col}' from {clean_path} by index alignment.")
+            df[time_col] = pd.to_datetime(df_clean[time_col].values, errors="coerce")
+            print(f"Added '{time_col}' from {clean_path} by index alignment")
             return df
     except Exception:
         pass
 
-    # common identifier column
+    # 3) merge on common identifier column
     try:
         left = df.reset_index()
         common = set(left.columns).intersection(set(df_clean.columns))
-        # prefer 'Unnamed: 0', 'id', 'loan_id' if available
+        # prefer 'Unnamed: 0' or obvious id-like columns
         preferred = ["Unnamed: 0", "id", "loan_id"]
         key = None
         for p in preferred:
@@ -139,16 +140,15 @@ def recover_time_column(df: pd.DataFrame, clean_path: Path, time_col: str = "iss
                 break
         if key is None and common:
             key = sorted(common)[0]
-        
+
         if key is not None:
-            merged = left.merge(df_clean[key, time_col], how='left', on=key)
+            merged = left.merge(df_clean[[key, time_col]], how="left", on=key)
             if time_col in merged.columns and merged[time_col].notna().any():
-                # restore original index
+                # restore index
                 merged = merged.set_index(left.columns[0])
-                df[time_col] = pd.to_datetime(merged[time_col], errors='coerce')
-                print(f"Added '{time_col}' from {clean_path} by merging on '{key}'.")
+                df[time_col] = pd.to_datetime(merged[time_col].values, errors="coerce")
+                print(f"Added '{time_col}' from {clean_path} by merging on '{key}'")
                 return df
-            
     except Exception:
         pass
 
@@ -161,11 +161,11 @@ def train_baseline_logistic(X: pd.DataFrame, y: pd.Series, C: float = 1.0, penal
     Returns fitted sklearn Pipeline.
     """
     set_seed(seed)
-    # default to balanced class weights if none provided
+    # default to balanced class weights when caller does not provide one
     cw = class_weight if class_weight is not None else "balanced"
     pipe = Pipeline([
-        ("scaler", StandardScaler()),   
-        ("clf", LogisticRegression(c=C, penalty=penalty, class_weight=cw, solver=solver, random_state=seed, max_iter=1000))
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(C=C, penalty=penalty, class_weight=cw, solver=solver, max_iter=1000, random_state=seed))
     ])
     pipe.fit(X, y)
     return pipe
@@ -179,16 +179,17 @@ def tune_logistic(X: pd.DataFrame, y: pd.Series, param_grid: Optional[dict] = No
     set_seed(seed)
     if param_grid is None:
         param_grid = {
-            "clf__C": [0.01, 0.1, 1.0, 10.0],
             "clf__penalty": ["l2"],
+            "clf__C": [0.01, 0.1, 1.0, 10.0]
         }
     pipe = Pipeline([
-        ("scaler", StandardScaler()),   
-        ("clf", LogisticRegression(class_weight="balanced", solver="saga", random_state=seed, max_iter=2000))
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(class_weight="balanced", solver="saga", max_iter=2000, random_state=seed))
     ])
     grid = GridSearchCV(pipe, param_grid=param_grid, scoring="roc_auc", cv=cv, n_jobs=1)
     grid.fit(X, y)
     return grid
+
 
 def stratified_subsample(X: pd.DataFrame, y: pd.Series, frac: float = 0.15, seed: int = 42) -> tuple[pd.DataFrame, pd.Series]:
     """Return a stratified subsample of (X, y) preserving class proportions.
@@ -196,36 +197,36 @@ def stratified_subsample(X: pd.DataFrame, y: pd.Series, frac: float = 0.15, seed
     frac: fraction of rows to sample (e.g., 0.1-0.2)
     """
     if not 0 < frac <= 1.0:
-        raise ValueError("frac must be in (0, 1].")
-    # If the dataset is small enough, return the original
+        raise ValueError("frac must be in (0, 1]")
+    # If dataset is small, return the original
     n = X.shape[0]
     subsample_n = int(max(2, round(n * frac)))
     if subsample_n >= n:
         return X.copy(), y.copy()
-    
+
     X_sub, _, y_sub, _ = train_test_split(
         X,
         y,
         train_size=subsample_n,
         stratify=y,
-        random_state=seed
+        random_state=seed,
     )
     return X_sub, y_sub
 
 
-def compute_metrics(y_true: np.ndarray, y_scores: np.ndarray, n_bins: int = 10):
+def compute_metrics(y_true: np.ndarray, y_scores: np.ndarray, n_bins: int = 10) -> Dict[str, Any]:
     """Compute AUC, KS, precision, recall (0.5 threshold), Brier, and calibration table."""
     out: Dict[str, Any] = {}
-    try: 
+    try:
         out["auc"] = float(roc_auc_score(y_true, y_scores))
     except Exception:
         out["auc"] = None
-    
-    try: 
-        out["ks"] = float(eval_utils.compute_ks(y_true, y_scores))
+
+    try:
+        out["ks"] = float(eval_utils.ks_statistic(y_true, y_scores))
     except Exception:
         out["ks"] = None
-    
+
     try:
         y_pred = (y_scores >= 0.5).astype(int)
         out["precision"] = float(precision_score(y_true, y_pred, zero_division=0))
@@ -237,7 +238,7 @@ def compute_metrics(y_true: np.ndarray, y_scores: np.ndarray, n_bins: int = 10):
         out["brier"] = float(brier_score_loss(y_true, y_scores))
     except Exception:
         out["brier"] = None
-    
+
     try:
         frac_pos, mean_pred = calibration_curve(y_true, y_scores, n_bins=n_bins)
         out["calibration"] = {"frac_pos": frac_pos.tolist(), "mean_pred": mean_pred.tolist()}
@@ -246,8 +247,10 @@ def compute_metrics(y_true: np.ndarray, y_scores: np.ndarray, n_bins: int = 10):
 
     return out
 
+
 def save_pipeline(model, path: Path):
     save_model(model, path)
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Train baseline and tuned logistic PD models')
